@@ -247,3 +247,8 @@ class Magazine(BaseModel):
 
     def __str__(self):
         return self.title
+
+
+class ReservationMovie(BaseModel):
+    movie = models.ForeignKey(Movie)
+    release_date = models.DateField()
