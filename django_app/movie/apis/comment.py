@@ -30,9 +30,12 @@ class CommentView(generics.ListCreateAPIView):
         movie = Movie.objects.get(pk=self.kwargs['pk'])
         author = MyUser.objects.get(pk=self.request.user.pk)
         # 욕설 필터링 시작
-        content = self.request.data['content']
-        r = ProfanitiesFilter()
-        clean_content = r.clean(content)
+        try:
+            content = self.request.data['content']
+            r = ProfanitiesFilter()
+            clean_content = r.clean(content)
+        except:
+            clean_content = ''
         # 욕설 필터링 끝
         if Comment.objects.filter(movie=movie, author=author).exists():
             raise NotAcceptable('이미 코멘트를 작성했습니다')
@@ -54,17 +57,26 @@ class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
         instance = serializer.instance
         movie_pk = instance.movie.pk
         movie = Movie.objects.get(pk=movie_pk)
+        # 욕 필터링 시작
+        try:
+            content = self.request.data['content']
+            r = ProfanitiesFilter()
+            clean_content = r.clean(content)
+        except:
+            clean_content = serializer.instance.content
+        # 욕 필터링 끝
         old_star = instance.star
         new_star = float(self.request.data['star'])
+
         if old_star == new_star:
-            serializer.save()
+            serializer.save(content=clean_content)
         else:
             movie.star_sum -= old_star
             movie.star_sum += new_star
             # 평점 계산
             movie.star_average = ((movie.star_average * movie.comment_count) - old_star + new_star) / movie.comment_count
             movie.save()
-            serializer.save()
+            serializer.save(content=clean_content)
 
     def perform_destroy(self, instance):
         movie_pk = instance.movie.pk
@@ -103,7 +115,8 @@ class TopCommentView(APIView):
     # django Aggregation API 활용
     # 참조: https://docs.djangoproject.com/en/1.10/topics/db/aggregation/
     def get(self, request, *args, **kwargs):
-        top_comment = Comment.objects.annotate(num_likes=Count('like_users')).order_by('-num_likes')[:3]
+        comments = Comment.objects.filter(movie=self.kwargs['pk'])
+        top_comment = comments.annotate(num_likes=Count('like_users')).order_by('-num_likes')[:3]
         serializer = CommentSerializer(top_comment, many=True)
         return Response(serializer.data)
 
